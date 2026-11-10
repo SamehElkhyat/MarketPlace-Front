@@ -1,0 +1,250 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens — "Alabaster & Walnut"
+   The ONLY place raw colour values live. Components use semantic utilities
+   (bg-background, text-muted-foreground, border-border …), never hex.
+   Ratio: ~60% backgrounds · ~30% text & buttons · Clay accent < 10%.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --background: #f4f1eb;
+  --foreground: #1f1a16;
+  --card: #fbfaf7;
+  --card-foreground: #1f1a16;
+  --popover: #fbfaf7;
+  --popover-foreground: #1f1a16;
+  --primary: #3e2f25;
+  --primary-foreground: #fbfaf7;
+  --secondary: color-mix(in oklab, var(--background) 92%, var(--primary));
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklab, var(--background) 94%, var(--primary));
+  --muted-foreground: #6f675d;
+  --accent: #9c5b3b; /* Clay */
+  --accent-foreground: #fbfaf7;
+  --border: #cfc6b8;
+  --input: #cfc6b8;
+  --ring: #3e2f25;
+  --destructive: #a63d2f;
+  --success: #3f6b4a;
+  --warning: #9a6a1c;
+
+  --radius: 0.25rem; /* 4px — small corners, thin lines instead of shadows */
+
+  --chart-1: #3e2f25;
+  --chart-2: #9c5b3b;
+  --chart-3: #8a7f6e;
+  --chart-4: #b9a98f;
+  --chart-5: #5c6b5e;
+
+  --sidebar: #fbfaf7;
+  --sidebar-foreground: #1f1a16;
+  --sidebar-primary: #3e2f25;
+  --sidebar-primary-foreground: #fbfaf7;
+  --sidebar-accent: color-mix(in oklab, var(--background) 90%, var(--primary));
+  --sidebar-accent-foreground: #1f1a16;
+  --sidebar-border: #cfc6b8;
+  --sidebar-ring: #3e2f25;
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.dark {
+  --background: #171412;
+  --foreground: #eee9e2;
+  --card: #201c19;
+  --card-foreground: #eee9e2;
+  --popover: #201c19;
+  --popover-foreground: #eee9e2;
+  --primary: #e8dfd2;
+  --primary-foreground: #2a211b;
+  --muted-foreground: #a89f94;
+  --accent: #c98a66;
+  --accent-foreground: #2a211b;
+  --border: #332d28;
+  --input: #332d28;
+  --ring: #e8dfd2;
+  --destructive: #d9806f;
+  --success: #86b394;
+  --warning: #d6a55a;
+
+  --chart-1: #e8dfd2;
+  --chart-2: #c98a66;
+  --chart-3: #a89f94;
+  --chart-4: #7a6f60;
+  --chart-5: #86b394;
+
+  --sidebar: #1b1714;
+  --sidebar-foreground: #eee9e2;
+  --sidebar-primary: #e8dfd2;
+  --sidebar-primary-foreground: #2a211b;
+  --sidebar-accent: #2a2420;
+  --sidebar-accent-foreground: #eee9e2;
+  --sidebar-border: #332d28;
+  --sidebar-ring: #e8dfd2;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Radii: 2–4px only. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
+
+  /* A deliberately small, fixed type scale: 12 / 14 / 16 / 20 / 28 / 40 / 56 */
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.6;
+  --text-base: 1rem;
+  --text-base--line-height: 1.7;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.75rem;
+  --text-xl--line-height: 1.25;
+  --text-2xl: 2.5rem;
+  --text-2xl--line-height: 1.15;
+  --text-3xl: 3.5rem;
+  --text-3xl--line-height: 1.08;
+
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+  --font-serif: var(--font-display);
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --breakpoint-3xl: 1280px;
+}
+
+/* Fonts switch with the document language (set on <html lang>). */
+html {
+  --font-body: var(--font-inter), var(--font-plex-arabic), system-ui, sans-serif;
+  --font-display: var(--font-cormorant), var(--font-amiri), Georgia, serif;
+}
+html[lang="ar"] {
+  --font-body: var(--font-plex-arabic), var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-amiri), var(--font-cormorant), Georgia, serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply scroll-smooth antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background font-sans text-base text-foreground;
+    min-height: 100dvh;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading font-light tracking-tight text-balance;
+  }
+  /* Arabic needs more leading and no negative tracking. */
+  html[lang="ar"] h1,
+  html[lang="ar"] h2,
+  html[lang="ar"] h3,
+  html[lang="ar"] h4 {
+    @apply tracking-normal;
+    line-height: 1.35;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 30%, transparent);
+  }
+}
+
+@layer components {
+  /* 12-column grid inside a 1280px max-width container. */
+  .page-container {
+    @apply mx-auto w-full max-w-[1280px] px-4 md:px-8;
+  }
+  .page-grid {
+    @apply grid grid-cols-4 gap-x-4 md:grid-cols-12 md:gap-x-6;
+  }
+  /* Generous vertical rhythm: 64px on mobile, 96–128px on desktop. */
+  .section-y {
+    @apply py-16 md:py-24 lg:py-32;
+  }
+  .eyebrow {
+    @apply text-xs font-medium tracking-[0.18em] text-accent uppercase;
+  }
+  html[lang="ar"] .eyebrow {
+    @apply tracking-normal;
+  }
+  /* Product imagery is always 4:5 on a near-identical backdrop. */
+  .media-4x5 {
+    @apply relative aspect-[4/5] overflow-hidden bg-muted;
+  }
+}
+
+@layer utilities {
+  .transition-soft {
+    transition-duration: 250ms;
+    transition-timing-function: var(--ease-out);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
