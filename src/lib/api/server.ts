@@ -4,6 +4,13 @@ import { buildQuery, type QueryParams } from "./query-string";
 
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4000").replace(/\/$/, "");
 
+/** On Vercel a missing BACKEND_URL silently falls back to localhost; fail early with a message that says so. */
+if (process.env.VERCEL && !process.env.BACKEND_URL) {
+  throw new Error(
+    "BACKEND_URL is not set. Add it in Vercel → Project → Settings → Environment Variables (the deployed API URL).",
+  );
+}
+
 /**
  * Server-side GET straight to the API (no browser, no rewrite hop). Used by the cached data loaders in
  * `lib/data/*` — the public catalogue needs no authentication, so results can be shared across users.
@@ -17,17 +24,24 @@ export async function serverGet<T>(path: string, query?: QueryParams): Promise<T
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    throw new ApiError(0, "NETWORK", `API unreachable at ${BACKEND_URL}`);
+    throw new ApiError(0, "NETWORK", `API unreachable at ${BACKEND_URL} (GET /api${path})`);
   }
 
   if (!response.ok) {
+    // Read as text first: a crashing function answers with a plain-text/HTML page, not our JSON error shape.
+    const raw = await response.text().catch(() => "");
     let body: { error?: { code?: ApiErrorCode; message?: string } } = {};
     try {
-      body = await response.json();
+      body = JSON.parse(raw);
     } catch {
-      // ignore
+      // not JSON
     }
-    throw new ApiError(response.status, body.error?.code ?? "INTERNAL", body.error?.message ?? response.statusText);
+    const detail = body.error?.message ?? (raw.trim().slice(0, 160) || response.statusText);
+    throw new ApiError(
+      response.status,
+      body.error?.code ?? "INTERNAL",
+      `Backend ${BACKEND_URL} answered ${response.status} for GET /api${path}: ${detail}`,
+    );
   }
   return (await response.json()) as T;
 }
