@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The API repository used by the E2E job. Override with a repository variable (Settings → Variables → BACKEND_REPOSITORY).
+  BACKEND_REPOSITORY: ${{ vars.BACKEND_REPOSITORY || 'SamehElkhyat/MarketPlace' }}
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  e2e:
+    name: End-to-end (Playwright, against the real API)
+    needs: checks
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27018/marketplace?replicaSet=rs0
+      JWT_ACCESS_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      BCRYPT_COST: "4"
+      LOG_LEVEL: warn
+      PORT: "4000"
+      RATE_LIMIT_SCALE: "100"
+      BACKEND_URL: http://localhost:4000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      REVALIDATE_SECRET: ci-revalidate-secret
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: web }
+      - name: Check out the API
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BACKEND_REPOSITORY }}
+          # Needed only if the API repo is private: create a fine-grained PAT with read access and store it as BACKEND_REPO_TOKEN.
+          token: ${{ secrets.BACKEND_REPO_TOKEN || github.token }}
+          path: api
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Install
+        run: |
+          npm ci --prefix api
+          npm ci --prefix web
+          npx --prefix web playwright install --with-deps chromium
+      - name: Database + API
+        run: |
+          (cd api && nohup npm run dev:db > ../db.log 2>&1 &)
+          for i in $(seq 1 60); do grep -q "replica set ready" db.log && break; sleep 2; done
+          (cd api && npm run seed)
+          (cd api && nohup npm run dev > ../api.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:4000/health && break; sleep 2; done
+      - name: Build + start storefront
+        working-directory: web
+        run: |
+          npm run build
+          nohup npm start > ../web.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/en && break; sleep 2; done
+      - name: Playwright
+        working-directory: web
+        run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-diagnostics
+          path: |
+            web/playwright-report
+            web/test-results
+            *.log
