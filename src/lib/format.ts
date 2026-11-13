@@ -38,8 +38,36 @@ export const pick = (text: Localized | undefined, locale: Locale): string =>
 /** Piasters → EGP string for form inputs ("149.99"). */
 export const piastersToInput = (piasters: number): string => (piasters / 100).toFixed(2).replace(/\.00$/, "");
 
-/** Form input ("149.99") → integer piasters, avoiding float drift. */
-export const inputToPiasters = (value: string): number => {
-  const [whole = "0", fraction = ""] = value.trim().replace(",", ".").split(".");
-  return Number(whole) * 100 + Number((fraction + "00").slice(0, 2));
-};
+const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
+
+/**
+ * Form input → integer piasters (no float drift), or `null` when it isn't a valid amount.
+ * Accepts what a real admin types: Arabic-Indic digits (٢٤٩٫٥٠), "1,299.50" / "1.299,50"-style grouping,
+ * a decimal comma ("1,5"), and stray spaces. Never guesses: more than two decimals or letters → `null`,
+ * so a typo can't silently become a wrong price.
+ */
+export function parsePriceInput(value: string): number | null {
+  let text = value
+    .replace(ARABIC_DIGITS, (d) => String(d.charCodeAt(0) & 0xf)) // ٠-٩ and ۰-۹ share the low nibble with 0-9
+    .replace(/[٫]/g, ".") // Arabic decimal separator
+    .replace(/[٬\s ]/g, "") // Arabic thousands separator, spaces
+    .trim();
+  if (!text) return null;
+
+  if (text.includes(",") && text.includes(".")) {
+    // Both present: whichever comes last is the decimal mark, the other is grouping.
+    const decimalIsDot = text.lastIndexOf(".") > text.lastIndexOf(",");
+    text = decimalIsDot ? text.replace(/,/g, "") : text.replace(/\./g, "").replace(",", ".");
+  } else if (text.includes(",")) {
+    // "1,299" / "1,299,000" are grouped thousands; "1,5" / "19,90" are a decimal comma.
+    text = /^\d{1,3}(,\d{3})+$/.test(text) ? text.replace(/,/g, "") : text.replace(",", ".");
+  }
+
+  const match = /^(\d+)?(?:\.(\d{1,2}))?$/.exec(text);
+  if (!match || (match[1] === undefined && match[2] === undefined)) return null;
+  const piasters = Number(match[1] ?? "0") * 100 + Number(((match[2] ?? "") + "00").slice(0, 2));
+  return Number.isSafeInteger(piasters) ? piasters : null;
+}
+
+/** Like {@link parsePriceInput} for payloads: an unreadable amount becomes NaN so the API rejects it loudly. */
+export const inputToPiasters = (value: string): number => parsePriceInput(value) ?? Number.NaN;

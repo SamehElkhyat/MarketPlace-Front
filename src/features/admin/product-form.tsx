@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Field } from "@/components/shared/field";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminHeading, useWriteGuard } from "@/features/admin/admin-ui";
 import { ImageUploader, type ProductImageValue } from "@/features/admin/image-uploader";
+import { effectiveSku, findProblems, newSkuToken, type DraftProblem } from "@/features/admin/product-draft";
 import { effectiveAttributes, useAdminBrands, useCategoryList } from "@/features/admin/use-admin-data";
 import { useErrorMessage } from "@/hooks/use-error-message";
 import { useLocale, useT } from "@/i18n/client";
@@ -56,7 +57,7 @@ interface ProductDoc {
   images: { url: string; publicId?: string }[];
   specs: Record<string, string>;
   options: { key: string; values: string[] }[];
-  variants: { sku: string; optionValues: Record<string, string>; price: number; compareAtPrice?: number; stock: number }[];
+  variants: { sku: string; optionValues?: Record<string, string>; price: number; compareAtPrice?: number; stock: number }[];
   tags?: string[];
   status: "draft" | "published";
 }
@@ -73,16 +74,11 @@ function cartesian(options: [string, string[]][]): Record<string, string>[] {
 }
 
 /** Rebuilds the variant matrix from the chosen options, keeping rows the admin already filled in. */
-function syncVariants(previous: VariantRow[], options: Record<string, string[]>, attributes: AttributeDef[], titleEn: string): VariantRow[] {
+function syncVariants(previous: VariantRow[], options: Record<string, string[]>, attributes: AttributeDef[]): VariantRow[] {
   const ordered = attributes.filter((a) => a.variantOption && (options[a.key]?.length ?? 0) > 0).map((a) => [a.key, options[a.key]!] as [string, string[]]);
   const kept = new Map(previous.map((row) => [comboKey(row.optionValues), row]));
-  const prefix = titleEn.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 12) || "SKU";
-  return cartesian(ordered).map((optionValues) => {
-    const existing = kept.get(comboKey(optionValues));
-    if (existing) return existing;
-    const suffix = Object.values(optionValues).join("-").toUpperCase().replace(/[^A-Z0-9-]+/g, "");
-    return { sku: suffix ? `${prefix}-${suffix}` : prefix, optionValues, price: previous[0]?.price ?? "", compareAt: "", stock: "0", existing: false };
-  });
+  // New rows leave the SKU blank on purpose: it is generated from the title + options when saving.
+  return cartesian(ordered).map((optionValues) => kept.get(comboKey(optionValues)) ?? { sku: "", optionValues, price: previous[0]?.price ?? "", compareAt: "", stock: "0", existing: false });
 }
 
 function Card({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
@@ -101,7 +97,8 @@ const toFormState = (p: ProductDoc): FormState => ({
   images: p.images.map((i) => ({ url: i.url, publicId: i.publicId })),
   specs: p.specs,
   options: Object.fromEntries(p.options.map((o) => [o.key, o.values])),
-  variants: p.variants.map((v) => ({ sku: v.sku, optionValues: v.optionValues, price: piastersToInput(v.price), compareAt: v.compareAtPrice ? piastersToInput(v.compareAtPrice) : "", stock: String(v.stock), existing: true })),
+  // `?? {}`: products saved before the API kept empty option maps arrive without `optionValues`.
+  variants: p.variants.map((v) => ({ sku: v.sku, optionValues: v.optionValues ?? {}, price: piastersToInput(v.price), compareAt: v.compareAtPrice ? piastersToInput(v.compareAtPrice) : "", stock: String(v.stock), existing: true })),
 });
 
 /** Loads the product (when editing) and hands it to the form as its INITIAL state — no sync-in-effect needed. */
@@ -126,6 +123,9 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
   const brands = useAdminBrands();
   const [state, setState] = useState<FormState>(initial);
   const [issues, setIssues] = useState<string[]>([]);
+  const [problems, setProblems] = useState<DraftProblem[]>([]);
+  const [skuToken] = useState(newSkuToken);
+  const problemsRef = useRef<HTMLDivElement>(null);
 
   const attributes = useMemo(() => effectiveAttributes(categories.data ?? [], state.categoryId), [categories.data, state.categoryId]);
   const variantAttributes = attributes.filter((a) => a.variantOption);
@@ -133,7 +133,7 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
   const patch = (partial: Partial<FormState>) => setState((s) => ({ ...s, ...partial }));
 
   const setOptions = (options: Record<string, string[]>, nextAttributes: AttributeDef[] = attributes) =>
-    setState((s) => ({ ...s, options, variants: syncVariants(s.variants, options, nextAttributes, s.titleEn) }));
+    setState((s) => ({ ...s, options, variants: syncVariants(s.variants, options, nextAttributes) }));
 
   const changeCategory = (categoryId: string) => {
     const nextAttributes = effectiveAttributes(categories.data ?? [], categoryId);
@@ -141,7 +141,7 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
     setState((s) => {
       const options = Object.fromEntries(Object.entries(s.options).filter(([k]) => allowed.has(k)));
       const specKeys = new Set(nextAttributes.filter((a) => !a.variantOption).map((a) => a.key));
-      return { ...s, categoryId, options, specs: Object.fromEntries(Object.entries(s.specs).filter(([k]) => specKeys.has(k))), variants: syncVariants(s.variants, options, nextAttributes, s.titleEn) };
+      return { ...s, categoryId, options, specs: Object.fromEntries(Object.entries(s.specs).filter(([k]) => specKeys.has(k))), variants: syncVariants(s.variants, options, nextAttributes) };
     });
   };
 
@@ -165,7 +165,7 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
         specs: Object.fromEntries(Object.entries(state.specs).filter(([, v]) => v.trim())),
         options: Object.entries(state.options).filter(([, v]) => v.length > 0).map(([key, values]) => ({ key, values })),
         variants: state.variants.map((v) => ({
-          sku: v.sku.trim().toUpperCase(),
+          sku: effectiveSku(v, state.titleEn, skuToken),
           optionValues: v.optionValues,
           price: inputToPiasters(v.price || "0"),
           ...(v.compareAt.trim() ? { compareAtPrice: inputToPiasters(v.compareAt) } : {}),
@@ -194,19 +194,52 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
 
   const attrLabel = (a: AttributeDef) => pick(a.label, locale);
   const valueLabel = (a: AttributeDef, value: string) => { const v = a.values.find((x) => x.value === value); return v?.label ? pick(v.label, locale) : value; };
-  const complete = state.titleAr.trim() && state.titleEn.trim() && state.categoryId && state.variants.length > 0 && state.variants.every((v) => v.sku.trim() && v.price.trim());
+  const variantLabel = (row: VariantRow) => {
+    const parts = Object.entries(row.optionValues).map(([k, v]) => { const a = attributes.find((x) => x.key === k); return a ? valueLabel(a, v) : v; });
+    return parts.length ? parts.join(" · ") : t("admin.products.defaultVariant");
+  };
+  const describe = (problem: DraftProblem): string => {
+    if (problem.kind === "titleEn") return t("admin.products.missingTitleEn");
+    if (problem.kind === "titleAr") return t("admin.products.missingTitleAr");
+    if (problem.kind === "category") return t("admin.products.missingCategory");
+    const variant = variantLabel(state.variants[problem.variant]!);
+    const key = { sku: "missingSku", price: "missingPrice", invalidPrice: "invalidPrice", invalidCompare: "invalidCompare" } as const;
+    return t(`admin.products.${key[problem.kind]}`, { variant });
+  };
+
+  const submit = () => {
+    setIssues([]);
+    const found = findProblems(state, skuToken);
+    setProblems(found);
+    if (found.length > 0) {
+      // Never a silent no-op: say what is missing and bring it into view.
+      requestAnimationFrame(() => problemsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      return;
+    }
+    save.mutate();
+  };
 
   return (
     <form
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        setIssues([]);
-        save.mutate();
+        submit();
       }}
       className="space-y-6 pb-24"
     >
       <AdminHeading title={productId ? t("admin.products.edit") : t("admin.products.new")} />
+
+      {disabled ? (
+        <div role="status" className="border border-border bg-muted p-4 text-sm">{t("admin.products.readOnlyNotice")}</div>
+      ) : null}
+
+      {problems.length > 0 ? (
+        <div ref={problemsRef} role="alert" className="border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <p className="mb-2 font-medium text-destructive">{t("admin.products.missingTitle")}</p>
+          <ul className="list-inside list-disc space-y-1 text-xs text-muted-foreground">{problems.map((p, i) => <li key={i}>{describe(p)}</li>)}</ul>
+        </div>
+      ) : null}
 
       {issues.length > 0 ? (
         <div role="alert" className="border border-destructive/40 bg-destructive/5 p-4 text-sm">
@@ -292,7 +325,7 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
                       <span className="flex flex-wrap gap-1">{Object.entries(row.optionValues).map(([k, v]) => { const a = attributes.find((x) => x.key === k); return <Badge key={k} variant="outline">{a ? valueLabel(a, v) : v}</Badge>; })}</span>
                     )}
                   </td>
-                  <td className="px-1.5 py-1.5"><Input value={row.sku} onChange={(e) => updateVariant(index, { sku: e.target.value.toUpperCase() })} className="h-9 w-44" dir="ltr" aria-label="SKU" readOnly={row.existing && Boolean(productId)} /></td>
+                  <td className="px-1.5 py-1.5"><Input value={row.sku} onChange={(e) => updateVariant(index, { sku: e.target.value.toUpperCase() })} placeholder={effectiveSku(row, state.titleEn, skuToken)} title={row.sku ? undefined : t("admin.products.skuAuto")} className="h-9 w-48" dir="ltr" aria-label="SKU" readOnly={row.existing && Boolean(productId)} /></td>
                   <td className="px-1.5 py-1.5"><Input value={row.price} onChange={(e) => updateVariant(index, { price: e.target.value })} inputMode="decimal" className="h-9 w-28" dir="ltr" aria-label={t("admin.products.priceEgp")} /></td>
                   <td className="px-1.5 py-1.5"><Input value={row.compareAt} onChange={(e) => updateVariant(index, { compareAt: e.target.value })} inputMode="decimal" className="h-9 w-28" dir="ltr" aria-label={t("admin.products.comparePrice")} /></td>
                   <td className="px-1.5 py-1.5">
@@ -341,7 +374,7 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
           </label>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => router.push("/admin/products")}>{t("common.cancel")}</Button>
-            <Button type="submit" disabled={disabled || save.isPending || !complete}>{t("common.save")}</Button>
+            <Button type="submit" disabled={disabled || save.isPending}>{t("common.save")}</Button>
           </div>
         </div>
       </div>

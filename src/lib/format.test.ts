@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import imageLoader from "./cloudinary-loader";
-import { formatMoney, inputToPiasters, pick, piastersToInput } from "./format";
+import { formatMoney, inputToPiasters, parsePriceInput, pick, piastersToInput } from "./format";
 import { safeNext } from "@/features/auth/auth-views";
 
 describe("money", () => {
@@ -18,6 +18,21 @@ describe("money", () => {
     expect(inputToPiasters("100")).toBe(10000);
     expect(piastersToInput(14999)).toBe("149.99");
     expect(piastersToInput(10000)).toBe("100");
+  });
+
+  it("reads prices the way an Egyptian admin actually types them", () => {
+    expect(parsePriceInput("٢٤٩٫٥٠")).toBe(24950); // Arabic-Indic digits + Arabic decimal mark
+    expect(parsePriceInput("۱۲۰")).toBe(12000); // Persian digits
+    expect(parsePriceInput("1,299.50")).toBe(129950); // grouped thousands (used to become 1.29 EGP!)
+    expect(parsePriceInput("1,299")).toBe(129900);
+    expect(parsePriceInput("1.299,50")).toBe(129950);
+    expect(parsePriceInput(" 49 ")).toBe(4900);
+    expect(parsePriceInput(".5")).toBe(50);
+  });
+
+  it("refuses anything ambiguous instead of guessing a price", () => {
+    for (const bad of ["", "abc", "12.345", "1.2.3", "12 EGP", "-5", "--"]) expect(parsePriceInput(bad)).toBeNull();
+    expect(inputToPiasters("abc")).toBeNaN();
   });
 });
 

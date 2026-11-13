@@ -26,6 +26,9 @@ interface Signature {
   signature: string;
 }
 
+/** Cloudinary answered but refused the upload; the message is Cloudinary's own explanation. */
+class CloudinaryError extends Error {}
+
 /**
  * Drag & drop upload straight to Cloudinary using a short-lived SIGNED request from our API —
  * image bytes never pass through our server, and the API secret never reaches the browser.
@@ -51,13 +54,19 @@ export function ImageUploader({ value, onChange, disabled }: { value: ProductIma
           body.append("folder", sign.folder);
           body.append("signature", sign.signature);
           const response = await fetch(`https://api.cloudinary.com/v1_1/${sign.cloudName}/image/upload`, { method: "POST", body });
-          if (!response.ok) throw new Error("upload failed");
+          if (!response.ok) {
+            // Cloudinary explains itself ("Invalid Signature", "Unknown API key", "Invalid cloud_name"…) — surface it.
+            const detail = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+            throw new CloudinaryError(detail?.error?.message ?? `HTTP ${response.status}`);
+          }
           const result = (await response.json()) as { secure_url: string; public_id: string };
           added.push({ url: result.secure_url, publicId: result.public_id });
         }
         onChange([...value, ...added]);
       } catch (error) {
-        if (error instanceof ApiError && error.code === "BAD_REQUEST") toast.error(t("admin.products.cloudinaryMissing"));
+        if (error instanceof CloudinaryError) toast.error(t("admin.products.uploadRefused", { reason: error.message }));
+        else if (error instanceof ApiError && error.code === "BAD_REQUEST") toast.error(t("admin.products.cloudinaryMissing"));
+        else if (error instanceof ApiError && error.code === "UNAUTHENTICATED") toast.error(t("admin.products.sessionExpired"));
         else toast.error(error instanceof ApiError ? errorMessage(error) : t("admin.products.uploadFailed"));
         if (added.length) onChange([...value, ...added]);
       } finally {
