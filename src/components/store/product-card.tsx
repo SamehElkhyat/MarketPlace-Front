@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Price } from "@/components/shared/price";
 import { RatingStars } from "@/components/shared/rating-stars";
+import { CardHoverImage } from "@/components/store/card-hover-image";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/config";
@@ -19,8 +20,8 @@ interface ProductCardProps {
 }
 
 /**
- * Listing card: consistent 4:5 imagery, a second photo on hover, a quiet price line.
- * Rendered on the server; only the wishlist heart and the price formatter hydrate.
+ * Listing card: consistent 4:5 imagery, a second photo on hover (fetched on first intent only), a quiet price line.
+ * Rendered on the server; only the wishlist heart, the price formatter and the hover image hydrate.
  */
 export function ProductCard({ product, locale, t, priority = false, sizes = "(min-width: 1024px) 25vw, 50vw" }: ProductCardProps) {
   const title = pick(product.title, locale);
@@ -41,16 +42,7 @@ export function ProductCard({ product, locale, t, priority = false, sizes = "(mi
               className="object-cover transition-opacity duration-300 ease-out"
             />
           ) : null}
-          {second ? (
-            <Image
-              src={second.url}
-              alt=""
-              fill
-              sizes={sizes}
-              aria-hidden
-              className="object-cover opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-focus-within:opacity-100"
-            />
-          ) : null}
+          {second ? <CardHoverImage src={second.url} sizes={sizes} /> : null}
 
           <div className="pointer-events-none absolute inset-x-2 top-2 flex items-start justify-between gap-2">
             <div className="flex flex-col items-start gap-1">
