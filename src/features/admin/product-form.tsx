@@ -17,6 +17,7 @@ import { effectiveSku, findProblems, newSkuToken, type DraftProblem } from "@/fe
 import { effectiveAttributes, useAdminBrands, useCategoryList } from "@/features/admin/use-admin-data";
 import { useErrorMessage } from "@/hooks/use-error-message";
 import { useLocale, useT } from "@/i18n/client";
+import type { Locale } from "@/i18n/config";
 import { useLocalizedRouter } from "@/i18n/navigation";
 import { api } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
@@ -89,6 +90,16 @@ function Card({ title, description, children }: { title: string; description?: s
       {children}
     </section>
   );
+}
+
+/** "Fashion / Men / T-shirts" for the selected category (empty string when nothing is selected). */
+function categoryPath(flat: { _id: string; parentId: string | null; name: Localized }[], id: string, locale: Locale): string {
+  const byId = new Map(flat.map((c) => [c._id, c]));
+  const names: string[] = [];
+  for (let current = byId.get(id); current; current = current.parentId ? byId.get(current.parentId) : undefined) {
+    names.unshift(pick(current.name, locale));
+  }
+  return names.join(" / ");
 }
 
 const toFormState = (p: ProductDoc): FormState => ({
@@ -261,9 +272,20 @@ function ProductFormInner({ productId, initial }: { productId: string | undefine
         <div className="grid gap-5 md:grid-cols-2">
           <Field label={t("admin.products.category")} required>
             <Select value={state.categoryId} onValueChange={changeCategory}>
-              <SelectTrigger className="h-11 w-full"><SelectValue placeholder={t("admin.products.chooseCategory")} /></SelectTrigger>
-              <SelectContent>
-                {categories.flat.map((c) => <SelectItem key={c._id} value={c._id}>{"— ".repeat(c.depth)}{pick(c.name, locale)}</SelectItem>)}
+              <SelectTrigger className="h-11 w-full">
+                {/* Show the full path ("Fashion / Men / T-shirts") — the item text itself is indented, not prefixed. */}
+                <SelectValue placeholder={t("admin.products.chooseCategory")}>{categoryPath(categories.flat, state.categoryId, locale)}</SelectValue>
+              </SelectTrigger>
+              {/* popper: opens BELOW the field instead of covering it; scrolls inside a bounded height */}
+              <SelectContent position="popper" className="max-h-80 w-(--radix-select-trigger-width)">
+                {categories.flat.map((c) => (
+                  <SelectItem key={c._id} value={c._id} textValue={pick(c.name, locale)}>
+                    {/* Real inline-start padding mirrors correctly in RTL; "— " prefixes flipped to the wrong side. */}
+                    <span className={c.depth === 0 ? "font-medium" : "text-muted-foreground"} style={{ paddingInlineStart: `${c.depth * 1}rem` }}>
+                      {pick(c.name, locale)}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>

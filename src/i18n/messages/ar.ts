@@ -217,7 +217,7 @@ export const ar: DeepStrings<typeof en> = {
       importDone: "تم استيراد {ok} من {total} صف.",
       readOnlyNotice: "أنت مسجّل بحساب العرض التجريبي (للقراءة فقط) — الحفظ ورفع الصور معطّلان. سجّل الدخول بحساب الأدمن لإجراء تعديلات.",
       sessionExpired: "انتهت جلستك — سجّل الدخول مرة أخرى.",
-      uploadRefused: "رفضت Cloudinary الرفع: {reason}",
+      uploadRefused: "رفضت Cloudinary الرفع: {reason}. يمكنك لصق رابط الصورة في الحقل أدناه بدلاً من ذلك.",
       missingTitle: "أكمل البيانات التالية قبل الحفظ:",
       missingTitleEn: "العنوان بالإنجليزية", missingTitleAr: "العنوان بالعربية", missingCategory: "القسم",
       missingSku: "رمز SKU لنسخة «{variant}»", missingPrice: "سعر نسخة «{variant}»", invalidPrice: "سعر نسخة «{variant}» ليس مبلغًا صحيحًا (مثال: 249.50)",

@@ -46,7 +46,7 @@ Re-seed the API before each run, and start the API with `RATE_LIMIT_SCALE=100` (
 
 ## Deployment (Vercel)
 
-1. Deploy the **API first** and check its `/health` returns `{"status":"ok","db":"up"}` — this app's build fetches the catalogue for its static shell.
+1. Deploy the **API first** and check its `/health` returns `{"status":"ok","db":"up"}` — this app's build fetches the catalogue for its static shell. (If the API is down or broken at that moment the build **still succeeds**: it logs a warning and uses short-lived empty placeholders that are re-fetched from the API on the first real request. At runtime an API outage is never hidden — it surfaces as an error.)
 2. Import this repo into Vercel (framework: Next.js, no special settings).
 3. Set `BACKEND_URL` (API URL, no trailing path), `NEXT_PUBLIC_SITE_URL`, `REVALIDATE_SECRET`, then deploy.
 4. In the API project set `APP_URL=<this site>` and `REVALIDATE_URL=<this site>/revalidate`.

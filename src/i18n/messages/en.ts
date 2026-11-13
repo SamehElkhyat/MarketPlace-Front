@@ -214,7 +214,7 @@ export const en = {
       importDone: "Imported {ok} of {total} rows.",
       readOnlyNotice: "You're signed in as the read-only demo account — saving and uploading are disabled. Sign in as the admin to make changes.",
       sessionExpired: "Your session has expired — please sign in again.",
-      uploadRefused: "Cloudinary refused the upload: {reason}",
+      uploadRefused: "Cloudinary refused the upload: {reason}. You can paste an image URL below instead.",
       missingTitle: "Complete these before saving:",
       missingTitleEn: "English title", missingTitleAr: "Arabic title", missingCategory: "Category",
       missingSku: "SKU for “{variant}”", missingPrice: "Price for “{variant}”", invalidPrice: "Price for “{variant}” isn't a valid amount (e.g. 249.50)",
